@@ -44,6 +44,7 @@ source "hcloud" "talos" {
     os      = "talos",
     version = "${var.talos_version}",
     arch    = "${var.arch}",
+    "caph-image-name" = "talos-${var.talos_version}",
   }
 }
 

@@ -17,6 +17,8 @@ type packer
 #type talosctl
 # TODO: Test for cilium
 type cilium
+# TODO: Testfor helm
+type helm
 
 # TODO: Test for Docker
 type docker
@@ -28,9 +30,22 @@ if test -f .env; then
     source .env
 fi
 
+if test "$( hcloud image list --selector caph-image-name --output json | jq length )" -eq 0; then
+    echo "Warning: No image with label caph-image-name found. Image rebuild required."
+    PACKER_REBUILD=true
+fi
 if ${PACKER_REBUILD}; then
-    echo "### Create CAPH image"
-    packer build k8s1.28.4-ubuntu22.04-containerd/image.json
+    if ${TALOS}; then
+        # TODO: Set image name: caph-image-name
+        packer init k8s-talos/talos.pkr.hcl
+        packer build k8s-talos/talos.pkr.hcl
+        CLUSTERCTL_INIT_BOOTSTRAP=talos
+        CLUSTERCTL_INIT_CONTROL_PLANE=talos
+
+    else
+        echo "### Create CAPH image"
+        packer build k8s1.28.4-ubuntu22.04-containerd/image.json
+    fi
 fi
 
 #echo "### Create talos image"
@@ -67,7 +82,11 @@ export KUBECONFIG=./kubeconfig
 echo "### Initializing CAPH in bootstrap cluster"
 : "${CLUSTERCTL_INIT_BOOTSTRAP:=kubeadm}"
 : "${CLUSTERCTL_INIT_CONTROL_PLANE:=kubeadm}"
-if ! clusterctl init --bootstrap "${CLUSTERCTL_INIT_BOOTSTRAP}" --control-plane "${CLUSTERCTL_INIT_CONTROL_PLANE}" --infrastructure hetzner --wait-providers; then
+if ! clusterctl init \
+        --bootstrap "${CLUSTERCTL_INIT_BOOTSTRAP}" \
+        --control-plane "${CLUSTERCTL_INIT_CONTROL_PLANE}" \
+        --infrastructure hetzner \
+        --wait-providers; then
     echo "ERROR: Failed to execute 'clusterctl init'."
     false
 fi
@@ -114,7 +133,7 @@ export HCLOUD_REGION
 export HCLOUD_CONTROL_PLANE_MACHINE_TYPE
 export HCLOUD_WORKER_MACHINE_TYPE
 
-# TODO: Cleanup workload cluster (virtual machines, load balancers, placement groups)
+# TODO: Cleanup workload cluster (virtual machines, load balancers, placement groups, images)
 
 echo "### Rolling out workload cluster"
 clusterctl generate cluster "${CLUSTER_NAME}" \
@@ -250,7 +269,7 @@ kubectl --kubeconfig kubeconfig-${CLUSTER_NAME} --namespace kube-system get pods
     xargs -I{} kubectl --kubeconfig kubeconfig-${CLUSTER_NAME} --namespace kube-system exec -i {} --container cilium-agent -- cilium-health status
 
 echo "### Initialize CAPH in workload cluster"
-clusterctl init --kubeconfig kubeconfig-${CLUSTER_NAME} --infrastructure hetzner --wait-providers
+clusterctl init --bootstrap "${CLUSTERCTL_INIT_BOOTSTRAP}" --control-plane "${CLUSTERCTL_INIT_CONTROL_PLANE}" --kubeconfig kubeconfig-${CLUSTER_NAME} --infrastructure hetzner --wait-providers
 
 echo "### Waiting for management resources to be running"
 MAX_WAIT_SECONDS=$(( 30 * 60 ))
