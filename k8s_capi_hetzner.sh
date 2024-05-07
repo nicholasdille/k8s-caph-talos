@@ -114,6 +114,8 @@ export HCLOUD_REGION
 export HCLOUD_CONTROL_PLANE_MACHINE_TYPE
 export HCLOUD_WORKER_MACHINE_TYPE
 
+# TODO: Cleanup workload cluster (virtual machines, load balancers, placement groups)
+
 echo "### Rolling out workload cluster"
 clusterctl generate cluster "${CLUSTER_NAME}" \
     --kubernetes-version "v${KUBERNETES_VERSION}" \
