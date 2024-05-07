@@ -65,6 +65,7 @@ echo "### Create bootstrap cluster"
 case "${BOOTSTRAP_TOOL}" in
     kind)
         kind create cluster \
+            --name "${CLUSTER_NAME}-bootstrap" \
             --kubeconfig ./kubeconfig \
             --wait 5m
         ;;
@@ -99,7 +100,7 @@ kubectl get pods -A
 echo "### Prepare credentials"
 test -n "${HCLOUD_TOKEN}"
 kubectl create secret generic hetzner --from-literal=hcloud="${HCLOUD_TOKEN}"
-kubectl patch secret hetzner -p '{"metadata":{"labels":{"clusterctl.cluster.x-k8s.io/move":""}}}'
+#kubectl patch secret hetzner -p '{"metadata":{"labels":{"clusterctl.cluster.x-k8s.io/move":""}}}'
 
 echo "### Configure cluster"
 if test -z "${HCLOUD_SSH_KEY}"; then
@@ -134,6 +135,9 @@ export HCLOUD_CONTROL_PLANE_MACHINE_TYPE
 export HCLOUD_WORKER_MACHINE_TYPE
 
 # TODO: Cleanup workload cluster (virtual machines, load balancers, placement groups, images)
+#       - hcloud server list --selector caph-cluster-${CLUSTER_NAME}=owned --output json | jq --raw-output '.[].name' | xargs -n 1 hcloud server delete
+#       - hcloud load-balancer list --selector caph-cluster-${CLUSTER_NAME}=owned --output json | jq --raw-output '.[].name' | xargs -n 1 hcloud load-balancer delete
+#       - hcloud placement-group list --selector caph-cluster-${CLUSTER_NAME}=owned --output json | jq --raw-output '.[].name' | xargs -n 1 hcloud placement-group delete
 
 echo "### Rolling out workload cluster"
 clusterctl generate cluster "${CLUSTER_NAME}" \
@@ -181,8 +185,8 @@ KUBECONFIG=kubeconfig-${CLUSTER_NAME} helm install \
         --set encryption.nodeEncryption=false \
         --set extraConfig.ipam=kubernetes \
         --set extraConfig.kubeProxyReplacement=strict \
-        --set k8sServiceHost=${CONTROL_PLANE_ENDPOINT_IP} \
-        --set k8sServicePort=6443 \
+        --set k8sServiceHost=auto \
+        --set k8sServicePort=443 \
         --set kubeProxyReplacement=strict \
         --set operator.replicas=1 \
         --set serviceAccounts.cilium.name=cilium \
@@ -195,6 +199,16 @@ KUBECONFIG=kubeconfig-${CLUSTER_NAME} helm install \
         --set hubble.metrics.enabled="{dns,drop,tcp,flow,icmp,http}" \
         --wait --timeout 5m
 KUBECONFIG=kubeconfig-${CLUSTER_NAME} cilium status
+
+echo "### Deploy cloud-controller-manager"
+helm repo add syself https://charts.syself.com
+helm repo update syself
+KUBECONFIG=$CAPH_WORKER_CLUSTER_KUBECONFIG helm install \
+	--namespace kube-system \
+    ccm syself/ccm-hcloud \
+        --set secret.name=hetzner \
+        --set secret.tokenKeyName=hcloud \
+        --set privateNetwork.enabled=false
 
 MAX_WAIT_SECONDS=$(( 30 * 60 ))
 SECONDS=0
@@ -350,3 +364,17 @@ kubectl config set-cluster default --server="${SERVER}" --certificate-authority=
 kubectl config set-credentials my-cluster-admin --token="${TOKEN}"
 kubectl config set-context cluster-admin --cluster=default --user=my-cluster-admin
 kubectl config use-context cluster-admin
+
+echo "### Removing bootstrap cluster"
+case "${BOOTSTRAP_TOOL}" in
+    kind)
+        kind delete cluster "${CLUSTER_NAME}-bootstrap"
+        ;;
+    k3d)
+        k3d cluster delete "${CLUSTER_NAME}-bootstrap"
+        ;;
+    *)
+        echo "ERROR: Unsupported bootstrapping tool: ${BOOTSTRAP_TOOL}. Aborting."
+        false
+        ;;
+esac
