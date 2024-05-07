@@ -1,0 +1,16 @@
+{
+  "builds": [
+    {
+      "name": "hcloud",
+      "builder_type": "hcloud",
+      "build_time": 1715064391,
+      "files": null,
+      "artifact_id": "163576427",
+      "packer_run_uuid": "e7792084-dd7b-2e8c-091a-6b414b903da2",
+      "custom_data": {
+        "snapshot_label": "1.28.4-ubuntu-22.04-containerd-2024-05-07-0643"
+      }
+    }
+  ],
+  "last_run_uuid": "e7792084-dd7b-2e8c-091a-6b414b903da2"
+}

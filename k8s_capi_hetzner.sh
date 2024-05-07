@@ -15,6 +15,8 @@ type clusterctl
 type packer
 # TODO: Test for talosctl
 #type talosctl
+# TODO: Test for cilium
+type cilium
 
 # TODO: Test for Docker
 type docker
@@ -22,8 +24,14 @@ while ! docker version >/dev/null 2>&1; do
     sleep 2
 done
 
-echo "### Create CAPH image"
-packer build k8s1.28.4-ubuntu-22-04-containerd/image.json
+if test -f .env; then
+    source .env
+fi
+
+if ${PACKER_REBUILD}; then
+    echo "### Create CAPH image"
+    packer build k8s1.28.4-ubuntu22.04-containerd/image.json
+fi
 
 #echo "### Create talos image"
 # TODO: Set image name: caph-image-name
@@ -32,13 +40,28 @@ packer build k8s1.28.4-ubuntu-22-04-containerd/image.json
 #CLUSTERCTL_INIT_BOOTSTRAP=talos
 #CLUSTERCTL_INIT_CONTROL_PLANE=talos
 
+: "${CLUSTER_NAME:=my-cluster}"
+export CLUSTER_NAME
+
+# TODO: Cleanup bootstrap cluster
+
 echo "### Create bootstrap cluster"
-kind create cluster \
-    --kubeconfig ./kubeconfig \
-    --wait 5m
-# OR:
-# k3d cluster create
-# k3d kubeconfig get >./kubeconfig
+: "${BOOTSTRAP_TOOL:=kind}"
+case "${BOOTSTRAP_TOOL}" in
+    kind)
+        kind create cluster \
+            --kubeconfig ./kubeconfig \
+            --wait 5m
+        ;;
+    k3d)
+        k3d cluster create "${CLUSTER_NAME}-bootstrap" --kubeconfig-update-default=false
+        k3d kubeconfig get "${CLUSTER_NAME}-bootstrap" >./kubeconfig
+        ;;
+    *)
+        echo "ERROR: Unsupported bootstrapping tool: ${BOOTSTRAP_TOOL}. Aborting."
+        false
+        ;;
+esac
 export KUBECONFIG=./kubeconfig
 
 echo "### Initializing CAPH in bootstrap cluster"
@@ -48,9 +71,9 @@ if ! clusterctl init --bootstrap "${CLUSTERCTL_INIT_BOOTSTRAP}" --control-plane 
     echo "ERROR: Failed to execute 'clusterctl init'."
     false
 fi
-while kubectl get pods -A | tail -n +2 | grep -vq Running; do
+while kubectl get pods -A | tail -n +2 | grep -vqE "(Running|Completed)"; do
     echo "Waiting for all pods to be running..."
-    sleep 10
+    sleep 2
 done
 kubectl get pods -A
 
@@ -60,14 +83,36 @@ kubectl create secret generic hetzner --from-literal=hcloud="${HCLOUD_TOKEN}"
 kubectl patch secret hetzner -p '{"metadata":{"labels":{"clusterctl.cluster.x-k8s.io/move":""}}}'
 
 echo "### Configure cluster"
-export HCLOUD_SSH_KEY="<ssh-key-name>"
-export CLUSTER_NAME="my-cluster"
-export HCLOUD_REGION="fsn1"
-export CONTROL_PLANE_MACHINE_COUNT=1
-export WORKER_MACHINE_COUNT=3
-export KUBERNETES_VERSION=1.30.0
-export HCLOUD_CONTROL_PLANE_MACHINE_TYPE=cpx21
-export HCLOUD_WORKER_MACHINE_TYPE=cpx41
+if test -z "${HCLOUD_SSH_KEY}"; then
+    HCLOUD_SSH_KEY=caph
+
+    # TODO: Handle edge case that SSH key exists but file ssh is missing
+
+    SSH_KEY_JSON="$( hcloud ssh-key list --selector type=caph --output json )"
+    if test "$( jq 'length' <<<"${SSH_KEY_JSON}" )" -eq 0; then
+        echo "### Create and upload SSH key"
+        ssh-keygen -f ssh -t ed25519 -N ''
+        hcloud ssh-key create --name caph --label type=caph --public-key-from-file ./ssh.pub
+
+    elif test "$( jq 'length' <<<"${SSH_KEY_JSON}" )" -eq 1; then
+        echo "### Use existing SSH key"
+
+    else
+        echo "ERROR: No or exactly one SSH key with label type=caph is required. Aborting."
+        false
+
+    fi
+fi
+export HCLOUD_SSH_KEY
+: "${HCLOUD_REGION:=fsn1}"
+: "${CONTROL_PLANE_MACHINE_COUNT:=1}"
+: "${WORKER_MACHINE_COUNT:=3}"
+: "${KUBERNETES_VERSION:=1.28.4}"
+: "${HCLOUD_CONTROL_PLANE_MACHINE_TYPE:=cpx21}"
+: "${HCLOUD_WORKER_MACHINE_TYPE:=cpx41}"
+export HCLOUD_REGION
+export HCLOUD_CONTROL_PLANE_MACHINE_TYPE
+export HCLOUD_WORKER_MACHINE_TYPE
 
 echo "### Rolling out workload cluster"
 clusterctl generate cluster "${CLUSTER_NAME}" \
@@ -105,9 +150,6 @@ echo "### Getting kubeconfig for workload cluster"
 clusterctl get kubeconfig ${CLUSTER_NAME} >kubeconfig-${CLUSTER_NAME}
 
 echo "### Deploy CNI plugin"
-curl -L --remote-name-all https://github.com/cilium/cilium-cli/releases/latest/download/cilium-linux-amd64.tar.gz{,.sha256sum}
-sha256sum --check cilium-linux-amd64.tar.gz.sha256sum
-tar xvzf cilium-linux-amd64.tar.gz -C /usr/local/bin
 helm repo add cilium https://helm.cilium.io
 helm repo update
 KUBECONFIG=kubeconfig-${CLUSTER_NAME} helm install \
