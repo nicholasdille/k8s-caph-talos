@@ -9,19 +9,16 @@ packer {
 
 variable "talos_version" {
   type    = string
-  default = "v1.7.0"
+  default = "v1.7.1"
 }
-
 variable "arch" {
   type    = string
   default = "amd64"
 }
-
 variable "server_type" {
   type    = string
   default = "cx21"
 }
-
 variable "server_location" {
   type    = string
   default = "hel1"
@@ -38,7 +35,7 @@ source "hcloud" "talos" {
   server_type  = "${var.server_type}"
   ssh_username = "root"
 
-  snapshot_name   = "talos system disk - ${var.arch} - ${var.talos_version}"
+  snapshot_name   = "talos-${var.talos_version}"
   snapshot_labels = {
     type    = "infra",
     os      = "talos",

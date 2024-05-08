@@ -3,25 +3,62 @@ set -o errexit -o pipefail
 
 # https://github.com/syself/cluster-api-provider-hetzner/blob/main/docs/topics/quickstart.md
 
-# TODO: Test for envsubst
-type envsubst
-# TODO: Test for kind/k3d
-type kind
-# TODO: Test for kubectl
-type kubectl
-# TODO: Test for clusterctl
-type clusterctl
-# TODO: Test for packer
-type packer
-# TODO: Test for talosctl
-#type talosctl
-# TODO: Test for cilium
-type cilium
-# TODO: Testfor helm
-type helm
+: "${BOOTSTRAP_TOOL:=kind}"
 
-# TODO: Test for Docker
-type docker
+if ! type envsubst 2>&1; then
+    echo "ERROR: Missing envsubst. Aborting."
+    false
+fi
+if ! type jq 2>&1; then
+    echo "ERROR: Missing jq. Aborting."
+    false
+fi
+case "${BOOTSTRAP_TOOL}" in
+    kind)
+        if ! type kind 2>&1; then
+            echo "ERROR: Missing kind. Aborting."
+            false
+        fi
+        ;;
+    k3d)
+        if ! type k3d 2>&1; then
+            echo "ERROR: Missing k3d. Aborting."
+            false
+        fi
+        ;;
+esac
+if ! type hcloud 2>&1; then
+    echo "ERROR: Missing hcloud. Aborting."
+    false
+fi
+if ! type kubectl 2>&1; then
+    echo "ERROR: Missing kubectl. Aborting."
+    false
+fi
+if ! type clusterctl 2>&1; then
+    echo "ERROR: Missing clusterctl. Aborting."
+    false
+fi
+if ! type packer 2>&1; then
+    echo "ERROR: Missing packer. Aborting."
+    false
+fi
+if ${TALOS} && ! type talosctl 2>&1; then
+    echo "ERROR: Missing talosctl. Aborting."
+    false
+fi
+if ! type cilium 2>&1; then
+    echo "ERROR: Missing cilium. Aborting."
+    false
+fi
+if ! type helm 2>&1; then
+    echo "ERROR: Missing helm. Aborting."
+    false
+fi
+if ! type docker 2>&1; then
+    echo "ERROR: Missing docker. Aborting."
+    false
+fi
 while ! docker version >/dev/null 2>&1; do
     sleep 2
 done
@@ -29,6 +66,12 @@ done
 if test -f .env; then
     source .env
 fi
+
+if test -z "${HCLOUD_TOKEN}"; then
+    echo "ERROR: Missing environment variable HCLOUD_TOKEN. Aborting."
+    false
+fi
+export HCLOUD_TOKEN
 
 if test "$( hcloud image list --selector caph-image-name --output json | jq length )" -eq 0; then
     echo "Warning: No image with label caph-image-name found. Image rebuild required."
@@ -48,17 +91,21 @@ if ${PACKER_REBUILD}; then
     fi
 fi
 
-#echo "### Create talos image"
-# TODO: Set image name: caph-image-name
-#packer init .
-#packer build .
-#CLUSTERCTL_INIT_BOOTSTRAP=talos
-#CLUSTERCTL_INIT_CONTROL_PLANE=talos
-
 : "${CLUSTER_NAME:=my-cluster}"
 export CLUSTER_NAME
 
-# TODO: Cleanup bootstrap cluster
+function cleanup() {
+    case "${BOOTSTRAP_TOOL}" in
+        kind)
+            kind delete cluster \
+                --name "${CLUSTER_NAME}-bootstrap"
+            ;;
+        k3d)
+            k3d cluster delete "${CLUSTER_NAME}-bootstrap"
+            ;;
+    esac
+}
+#trap cleanup EXIT
 
 echo "### Create bootstrap cluster"
 : "${BOOTSTRAP_TOOL:=kind}"
@@ -95,18 +142,15 @@ while kubectl get pods -A | tail -n +2 | grep -vqE "(Running|Completed)"; do
     echo "Waiting for all pods to be running..."
     sleep 2
 done
-kubectl get pods -A
+sleep 30
 
 echo "### Prepare credentials"
-test -n "${HCLOUD_TOKEN}"
 kubectl create secret generic hetzner --from-literal=hcloud="${HCLOUD_TOKEN}"
-#kubectl patch secret hetzner -p '{"metadata":{"labels":{"clusterctl.cluster.x-k8s.io/move":""}}}'
+kubectl patch secret hetzner -p '{"metadata":{"labels":{"clusterctl.cluster.x-k8s.io/move":""}}}'
 
 echo "### Configure cluster"
 if test -z "${HCLOUD_SSH_KEY}"; then
     HCLOUD_SSH_KEY=caph
-
-    # TODO: Handle edge case that SSH key exists but file ssh is missing
 
     SSH_KEY_JSON="$( hcloud ssh-key list --selector type=caph --output json )"
     if test "$( jq 'length' <<<"${SSH_KEY_JSON}" )" -eq 0; then
@@ -116,6 +160,10 @@ if test -z "${HCLOUD_SSH_KEY}"; then
 
     elif test "$( jq 'length' <<<"${SSH_KEY_JSON}" )" -eq 1; then
         echo "### Use existing SSH key"
+        if ! test -f ssh; then
+            echo "ERROR: Missing ssh private key. Aborting."
+            false
+        fi
 
     else
         echo "ERROR: No or exactly one SSH key with label type=caph is required. Aborting."
@@ -125,19 +173,14 @@ if test -z "${HCLOUD_SSH_KEY}"; then
 fi
 export HCLOUD_SSH_KEY
 : "${HCLOUD_REGION:=fsn1}"
-: "${CONTROL_PLANE_MACHINE_COUNT:=1}"
+: "${CONTROL_PLANE_MACHINE_COUNT:=3}"
 : "${WORKER_MACHINE_COUNT:=3}"
 : "${KUBERNETES_VERSION:=1.28.4}"
 : "${HCLOUD_CONTROL_PLANE_MACHINE_TYPE:=cpx21}"
-: "${HCLOUD_WORKER_MACHINE_TYPE:=cpx41}"
+: "${HCLOUD_WORKER_MACHINE_TYPE:=cpx21}"
 export HCLOUD_REGION
 export HCLOUD_CONTROL_PLANE_MACHINE_TYPE
 export HCLOUD_WORKER_MACHINE_TYPE
-
-# TODO: Cleanup workload cluster (virtual machines, load balancers, placement groups, images)
-#       - hcloud server list --selector caph-cluster-${CLUSTER_NAME}=owned --output json | jq --raw-output '.[].name' | xargs -n 1 hcloud server delete
-#       - hcloud load-balancer list --selector caph-cluster-${CLUSTER_NAME}=owned --output json | jq --raw-output '.[].name' | xargs -n 1 hcloud load-balancer delete
-#       - hcloud placement-group list --selector caph-cluster-${CLUSTER_NAME}=owned --output json | jq --raw-output '.[].name' | xargs -n 1 hcloud placement-group delete
 
 echo "### Rolling out workload cluster"
 clusterctl generate cluster "${CLUSTER_NAME}" \
@@ -150,7 +193,7 @@ MAX_WAIT_SECONDS=$(( 30 * 60 ))
 SECONDS=0
 while test "${SECONDS}" -lt "${MAX_WAIT_SECONDS}"; do
     echo
-    echo "### Waiting for control plane of workload cluster to be ready"
+    echo "### Waiting for control plane of workload cluster to be initialized"
     clusterctl describe cluster ${CLUSTER_NAME}
 
     control_plane_initialized="$(
@@ -158,13 +201,11 @@ while test "${SECONDS}" -lt "${MAX_WAIT_SECONDS}"; do
             jq --raw-output '.status.conditions[] | select(.type == "ControlPlaneInitialized") | .status'
     )"
     if test "${control_plane_initialized}" == "True"; then
-        kubectl describe cluster ${CLUSTER_NAME}
-        kubectl describe KubeadmControlPlane
         echo "### Control plane initialized"
         break
     fi
 
-    sleep 60
+    sleep 30
 done
 if test "${control_plane_initialized}" == "False"; then
     echo "### Control plane failed to initialize"
@@ -185,8 +226,6 @@ KUBECONFIG=kubeconfig-${CLUSTER_NAME} helm install \
         --set encryption.nodeEncryption=false \
         --set extraConfig.ipam=kubernetes \
         --set extraConfig.kubeProxyReplacement=strict \
-        --set k8sServiceHost=auto \
-        --set k8sServicePort=443 \
         --set kubeProxyReplacement=strict \
         --set operator.replicas=1 \
         --set serviceAccounts.cilium.name=cilium \
@@ -198,17 +237,26 @@ KUBECONFIG=kubeconfig-${CLUSTER_NAME} helm install \
         --set hubble.ui.enabled=true \
         --set hubble.metrics.enabled="{dns,drop,tcp,flow,icmp,http}" \
         --wait --timeout 5m
-KUBECONFIG=kubeconfig-${CLUSTER_NAME} cilium status
 
 echo "### Deploy cloud-controller-manager"
 helm repo add syself https://charts.syself.com
 helm repo update syself
-KUBECONFIG=$CAPH_WORKER_CLUSTER_KUBECONFIG helm install \
+KUBECONFIG=kubeconfig-${CLUSTER_NAME} helm install \
 	--namespace kube-system \
     ccm syself/ccm-hcloud \
         --set secret.name=hetzner \
         --set secret.tokenKeyName=hcloud \
         --set privateNetwork.enabled=false
+
+echo "### Deploy csi"
+KUBECONFIG=kubeconfig-${CLUSTER_NAME} helm install \
+    --namespace kube-system \
+    csi syself/csi-hcloud \
+        --set controller.hcloudToken.existingSecret.name=hetzner \
+        --set controller.hcloudToken.existingSecret.key=hcloud \
+        --set storageClasses[0].name=hcloud-volumes \
+        --set storageClasses[0].defaultStorageClass=true \
+        --set storageClasses[0].reclaimPolicy=Retain
 
 MAX_WAIT_SECONDS=$(( 30 * 60 ))
 SECONDS=0
@@ -224,14 +272,14 @@ while test "${SECONDS}" -lt "${MAX_WAIT_SECONDS}"; do
     if test "${control_plane_ready}" == "True"; then
         kubectl describe cluster ${CLUSTER_NAME}
         kubectl describe KubeadmControlPlane
-        echo "### Control plane initialized"
+        echo "### Control plane ready"
         break
     fi
 
     sleep 60
 done
 if test "${control_plane_ready}" == "False"; then
-    echo "### Control plane failed to initialize"
+    echo "### Control plane failed to become ready"
     exit 1
 fi
 
@@ -247,14 +295,14 @@ while test "${SECONDS}" -lt "${MAX_WAIT_SECONDS}"; do
             jq --raw-output '.status.conditions[] | select(.type == "Ready") | .status'
     )"
     if test "${worker_ready}" == "True"; then
-        echo "### Worker ready"
+        echo "### Workers ready"
         break
     fi
 
     sleep 60
 done
 if test "${worker_ready}" == "False"; then
-    echo "### Workers failed to initialize"
+    echo "### Workers failed to become ready"
     kubectl describe machinedeployment ${CLUSTER_NAME}-md-0
     exit 1
 fi
@@ -279,8 +327,7 @@ if kubectl --kubeconfig kubeconfig-${CLUSTER_NAME} get nodes --output jsonpath='
 fi
 echo "### Nodes are ready"
 
-kubectl --kubeconfig kubeconfig-${CLUSTER_NAME} --namespace kube-system get pods --selector k8s-app=cilium --output name | \
-    xargs -I{} kubectl --kubeconfig kubeconfig-${CLUSTER_NAME} --namespace kube-system exec -i {} --container cilium-agent -- cilium-health status
+KUBECONFIG=kubeconfig-${CLUSTER_NAME} cilium status --wait
 
 echo "### Initialize CAPH in workload cluster"
 clusterctl init --bootstrap "${CLUSTERCTL_INIT_BOOTSTRAP}" --control-plane "${CLUSTERCTL_INIT_CONTROL_PLANE}" --kubeconfig kubeconfig-${CLUSTER_NAME} --infrastructure hetzner --wait-providers
