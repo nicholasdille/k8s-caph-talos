@@ -73,6 +73,7 @@ if test -z "${HCLOUD_TOKEN}"; then
 fi
 export HCLOUD_TOKEN
 
+: "${PACKER_REBUILD:=false}"
 if test "$( hcloud image list --selector caph-image-name --output json | jq length )" -eq 0; then
     echo "Warning: No image with label caph-image-name found. Image rebuild required."
     PACKER_REBUILD=true
