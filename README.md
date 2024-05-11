@@ -64,3 +64,4 @@ This is how the script works:
 ## TODO
 
 - [ ] Talos
+- [ ] Idempotency (being able to restart and pick up where it left off)
