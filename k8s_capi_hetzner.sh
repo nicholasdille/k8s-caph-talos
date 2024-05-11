@@ -188,7 +188,13 @@ clusterctl generate cluster "${CLUSTER_NAME}" \
     --kubernetes-version "v${KUBERNETES_VERSION}" \
     --control-plane-machine-count="${CONTROL_PLANE_MACHINE_COUNT}" \
     --worker-machine-count="${WORKER_MACHINE_COUNT}" \
-| kubectl apply -f -
+>cluster.yaml
+if ${STOP_AFTER_CLUSTER_YAML}; then
+    echo "STOP_AFTER_CLUSTER_YAML is set. Aborting."
+    exit 0
+fi
+
+kubectl apply -f cluster.yaml
 sleep 10
 MAX_WAIT_SECONDS=$(( 30 * 60 ))
 SECONDS=0

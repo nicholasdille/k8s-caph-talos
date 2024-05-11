@@ -44,6 +44,9 @@ The following environment variables are available:
 - `TALOS` defaults to `false`
 - `PACKER_REBUILD` defaults to `false` but is automatically set to `true` if no suitable image is found
 
+The following environment variables enable debugging the script:
+- `STOP_AFTER_CLUSTER_YAML` stops the script after the cluster configuration has been generated
+
 ## Internals
 
 This is how the script works:
