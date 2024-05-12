@@ -91,6 +91,12 @@ if ${PACKER_REBUILD}; then
         packer build k8s1.28.4-ubuntu22.04-containerd/image.json
     fi
 fi
+if test -z "${CAPH_IMAGE_NAME}"; then
+    CAPH_IMAGE_NAME="$(
+        hcloud image list --selector caph-image-name --output json \
+        | jq --raw-output 'sort_by(.created) | .[-1] | .labels."caph-image-name"'
+    )"
+fi
 
 : "${CLUSTER_NAME:=my-cluster}"
 export CLUSTER_NAME
@@ -189,6 +195,7 @@ clusterctl generate cluster "${CLUSTER_NAME}" \
     --control-plane-machine-count="${CONTROL_PLANE_MACHINE_COUNT}" \
     --worker-machine-count="${WORKER_MACHINE_COUNT}" \
 >cluster.yaml
+sed -i -E "s/^(\s+imageName:) .+$/\1 ${CAPH_IMAGE_NAME}/" cluster.yaml
 if ${STOP_AFTER_CLUSTER_YAML}; then
     echo "STOP_AFTER_CLUSTER_YAML is set. Aborting."
     exit 0
