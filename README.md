@@ -41,6 +41,7 @@ The script is configured using environment variables. They can be added to a `.e
 The following environment variables are available:
 - `HCLOUD_TOKEN`
 - `CLUSTER_NAME` defaults to `my-cluster`
+- `CAPH_IMAGE_NAME` defaults to youngest image with label `caph-image-name`
 - `HCLOUD_REGION` defaults to `fsn1`
 - `CONTROL_PLANE_MACHINE_COUNT` and `WORKER_MACHINE_COUNT` both default to 3
 - `HCLOUD_CONTROL_PLANE_MACHINE_TYPE` and `HCLOUD_WORKER_MACHINE_TYPE` both default to `cx21`
@@ -71,4 +72,5 @@ This is how the script works:
 ## TODO
 
 - [ ] Talos
-- [ ] Idempotency (being able to restart and pick up where it left off)
+- [x] Idempotency (being able to restart and pick up where it left off)
+- [ ] Configure CIDRs for pods and services

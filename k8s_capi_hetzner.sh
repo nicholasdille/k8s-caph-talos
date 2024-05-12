@@ -118,14 +118,24 @@ echo "### Create bootstrap cluster"
 : "${BOOTSTRAP_TOOL:=kind}"
 case "${BOOTSTRAP_TOOL}" in
     kind)
-        kind create cluster \
-            --name "${CLUSTER_NAME}-bootstrap" \
-            --kubeconfig ./kubeconfig \
-            --wait 5m
+        if kind get clusters | grep -q "^${CLUSTER_NAME}-bootstrap$"; then
+            echo "Bootstrap cluster already exists"
+    
+        else
+            kind create cluster \
+                --name "${CLUSTER_NAME}-bootstrap" \
+                --kubeconfig ./kubeconfig \
+                --wait 5m
+        fi
         ;;
     k3d)
-        k3d cluster create "${CLUSTER_NAME}-bootstrap" --kubeconfig-update-default=false
-        k3d kubeconfig get "${CLUSTER_NAME}-bootstrap" >./kubeconfig
+        if k3d cluster list | grep -q "^${CLUSTER_NAME}-bootstrap"; then
+            echo "Bootstrap cluster already exists"
+        
+        else
+            k3d cluster create "${CLUSTER_NAME}-bootstrap" --kubeconfig-update-default=false
+            k3d kubeconfig get "${CLUSTER_NAME}-bootstrap" >./kubeconfig
+        fi
         ;;
     *)
         echo "ERROR: Unsupported bootstrapping tool: ${BOOTSTRAP_TOOL}. Aborting."
@@ -152,8 +162,17 @@ done
 sleep 30
 
 echo "### Prepare credentials"
-kubectl create secret generic hetzner --from-literal=hcloud="${HCLOUD_TOKEN}"
-kubectl patch secret hetzner -p '{"metadata":{"labels":{"clusterctl.cluster.x-k8s.io/move":""}}}'
+if ! kubectl get secret hetzner >/dev/null 2>&1; then
+    kubectl create secret generic hetzner --from-literal=hcloud="${HCLOUD_TOKEN}"
+
+else
+    kubectl patch secret hetzner --patch-file <(cat <<EOF
+data:
+  hcloud: ${HCLOUD_TOKEN}
+EOF
+)
+fi
+kubectl patch secret hetzner --patch '{"metadata":{"labels":{"clusterctl.cluster.x-k8s.io/move":""}}}'
 
 echo "### Configure cluster"
 if test -z "${HCLOUD_SSH_KEY}"; then
@@ -190,11 +209,13 @@ export HCLOUD_CONTROL_PLANE_MACHINE_TYPE
 export HCLOUD_WORKER_MACHINE_TYPE
 
 echo "### Rolling out workload cluster"
-clusterctl generate cluster "${CLUSTER_NAME}" \
-    --kubernetes-version "v${KUBERNETES_VERSION}" \
-    --control-plane-machine-count="${CONTROL_PLANE_MACHINE_COUNT}" \
-    --worker-machine-count="${WORKER_MACHINE_COUNT}" \
->cluster.yaml
+if ! test -f cluster.yaml; then
+    clusterctl generate cluster "${CLUSTER_NAME}" \
+        --kubernetes-version "v${KUBERNETES_VERSION}" \
+        --control-plane-machine-count="${CONTROL_PLANE_MACHINE_COUNT}" \
+        --worker-machine-count="${WORKER_MACHINE_COUNT}" \
+    >cluster.yaml
+fi
 sed -i -E "s/^(\s+imageName:) .+$/\1 ${CAPH_IMAGE_NAME}/" cluster.yaml
 if ${STOP_AFTER_CLUSTER_YAML}; then
     echo "STOP_AFTER_CLUSTER_YAML is set. Aborting."
@@ -369,6 +390,7 @@ echo "### Move management resources to workload cluster"
 clusterctl move --to-kubeconfig kubeconfig-${CLUSTER_NAME}
 
 echo "### Creating cluster admin"
+# TODO: Always re-create sa, secret and kubeconfig
 mv kubeconfig-${CLUSTER_NAME} kubeconfig-${CLUSTER_NAME}-certificate
 export KUBECONFIG=kubeconfig-${CLUSTER_NAME}-certificate
 cat <<EOF | kubectl --namespace kube-system apply -f -
