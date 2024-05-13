@@ -9,7 +9,8 @@ packer {
 
 variable "talos_version" {
   type    = string
-  default = "v1.7.1"
+  # renovate: datasource=github-releases depName=siderolabs/talos extractVersion=^v(?<version>\d+\.\d+\.\d+)$
+  default = "1.7.1"
 }
 variable "arch" {
   type    = string
