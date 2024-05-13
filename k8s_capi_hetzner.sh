@@ -86,7 +86,10 @@ if ${PACKER_REBUILD}; then
 
     else
         echo "### Create CAPH image"
-        packer build k8s1.28.4-ubuntu22.04-containerd/image.json
+        pushd k8s1.28.4-ubuntu22.04-containerd
+        packer init ubuntu.pkr.hcl
+        packer build ubuntu.pkr.hcl
+        popd
     fi
 fi
 if ${TALOS}; then
