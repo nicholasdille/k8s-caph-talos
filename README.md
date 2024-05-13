@@ -75,7 +75,11 @@ This is how the script works:
 - [x] Idempotency (being able to restart and pick up where it left off)
 - [ ] Configure CIDRs for pods and services
     ```shell
-    yq eval '.spec.clusterNetwork.pods.cidrBlocks = ["foo"]' kubeadm/Cluster.yaml
+    yq --inplace eval '.spec.clusterNetwork.pods.cidrBlocks = ["foo"]' kubeadm/*.yaml
+    ```
+    OR
+    ```shell
+    yq --inplace eval 'select(.kind == "Cluster").spec.clusterNetwork.pods.cidrBlocks |= ["foo"]' cluster.yaml
     ```
 - [ ] Support infrastructure docker?
 - [ ] Support infrastructure vcluster?
