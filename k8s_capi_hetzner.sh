@@ -168,7 +168,7 @@ if ! kubectl get secret hetzner >/dev/null 2>&1; then
 else
     kubectl patch secret hetzner --patch-file <(cat <<EOF
 data:
-  hcloud: ${HCLOUD_TOKEN}
+  hcloud: $(echo -n "${HCLOUD_TOKEN}" | base64 -w0)
 EOF
 )
 fi
