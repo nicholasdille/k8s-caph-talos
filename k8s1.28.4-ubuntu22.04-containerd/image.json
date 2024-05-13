@@ -39,17 +39,5 @@
         "{{user `scripts`}}/cleanup.sh"
       ]
     }
-  ],
-  "post-processors": [
-    [
-      {
-        "output": "manifest.json",
-        "strip_path": false,
-        "type": "manifest",
-        "custom_data": {
-          "snapshot_label": "{{user `image-name`}}-{{user `version`}}"
-        }
-      }
-    ]
   ]
 }
