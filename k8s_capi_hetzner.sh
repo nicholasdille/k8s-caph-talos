@@ -83,13 +83,15 @@ if ${PACKER_REBUILD}; then
         # TODO: Set image name: caph-image-name
         packer init k8s-talos/talos.pkr.hcl
         packer build k8s-talos/talos.pkr.hcl
-        CLUSTERCTL_INIT_BOOTSTRAP=talos
-        CLUSTERCTL_INIT_CONTROL_PLANE=talos
 
     else
         echo "### Create CAPH image"
         packer build k8s1.28.4-ubuntu22.04-containerd/image.json
     fi
+fi
+if ${TALOS}; then
+    CLUSTERCTL_INIT_BOOTSTRAP=talos
+    CLUSTERCTL_INIT_CONTROL_PLANE=talos
 fi
 if test -z "${CAPH_IMAGE_NAME}"; then
     CAPH_IMAGE_NAME="$(
@@ -147,6 +149,7 @@ export KUBECONFIG=./kubeconfig
 echo "### Initializing CAPH in bootstrap cluster"
 : "${CLUSTERCTL_INIT_BOOTSTRAP:=kubeadm}"
 : "${CLUSTERCTL_INIT_CONTROL_PLANE:=kubeadm}"
+echo "    Using bootstrap provider <${CLUSTERCTL_INIT_BOOTSTRAP}> and control plane provider <${CLUSTERCTL_INIT_CONTROL_PLANE}>"
 if ! clusterctl init \
         --bootstrap "${CLUSTERCTL_INIT_BOOTSTRAP}" \
         --control-plane "${CLUSTERCTL_INIT_CONTROL_PLANE}" \
@@ -365,6 +368,8 @@ echo "### Nodes are ready"
 
 KUBECONFIG=kubeconfig-${CLUSTER_NAME} cilium status --wait
 
+# TODO: Retrieve talosconfig
+
 echo "### Initialize CAPH in workload cluster"
 clusterctl init --bootstrap "${CLUSTERCTL_INIT_BOOTSTRAP}" --control-plane "${CLUSTERCTL_INIT_CONTROL_PLANE}" --kubeconfig kubeconfig-${CLUSTER_NAME} --infrastructure hetzner --wait-providers
 
@@ -389,9 +394,9 @@ fi
 echo "### Pods are ready"
 echo "### Move management resources to workload cluster"
 clusterctl move --to-kubeconfig kubeconfig-${CLUSTER_NAME}
+# TODO: Is talosconfig moved as well?
 
 echo "### Creating cluster admin"
-# TODO: Always re-create sa, secret and kubeconfig
 mv kubeconfig-${CLUSTER_NAME} kubeconfig-${CLUSTER_NAME}-certificate
 export KUBECONFIG=kubeconfig-${CLUSTER_NAME}-certificate
 cat <<EOF | kubectl --namespace kube-system apply -f -

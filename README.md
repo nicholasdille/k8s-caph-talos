@@ -74,3 +74,9 @@ This is how the script works:
 - [ ] Talos
 - [x] Idempotency (being able to restart and pick up where it left off)
 - [ ] Configure CIDRs for pods and services
+    ```shell
+    yq eval '.spec.clusterNetwork.pods.cidrBlocks = ["foo"]' kubeadm/Cluster.yaml
+    ```
+- [ ] Support infrastructure docker?
+- [ ] Support infrastructure vcluster?
+- [ ] Check out [Cluster API Operator](https://github.com/kubernetes-sigs/cluster-api-operator)
