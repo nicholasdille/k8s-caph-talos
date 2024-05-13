@@ -1,0 +1,12 @@
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: HCloudMachineTemplate
+metadata:
+  name: my-cluster-md-0
+  namespace: default
+spec:
+  template:
+    spec:
+      imageName: 1.28.4-ubuntu-22.04-containerd-2024-05-13-1116
+      placementGroupName: md-0
+      type: cpx21

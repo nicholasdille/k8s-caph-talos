@@ -1,0 +1,12 @@
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: HCloudMachineTemplate
+metadata:
+  name: my-cluster-md-0
+  namespace: default
+spec:
+  template:
+    spec:
+      imageName: talos-v1.7.1
+      placementGroupName: md-0
+      type: cx21
