@@ -90,6 +90,11 @@ if ${PACKER_REBUILD}; then
     fi
 fi
 if ${TALOS}; then
+    echo "WARNING!!! Talos is not properly working (yet):"
+    echo "           1. Generating the cluster configuration does not include"
+    echo "              talos specific resources"
+    echo "           2. Using the talos providers for bootstrap and control plane"
+    echo "              breaks CAPH because of missing cloud-init data"
     CLUSTERCTL_INIT_BOOTSTRAP=talos
     CLUSTERCTL_INIT_CONTROL_PLANE=talos
 fi
