@@ -217,6 +217,7 @@ if ! test -f cluster.yaml; then
     >cluster.yaml
 fi
 sed -i -E "s/^(\s+imageName:) .+$/\1 ${CAPH_IMAGE_NAME}/" cluster.yaml
+: "${STOP_AFTER_CLUSTER_YAML:=false}"
 if ${STOP_AFTER_CLUSTER_YAML}; then
     echo "STOP_AFTER_CLUSTER_YAML is set. Aborting."
     exit 0
