@@ -12,14 +12,17 @@ variable "talos_version" {
   # renovate: datasource=github-releases depName=siderolabs/talos extractVersion=^v(?<version>\d+\.\d+\.\d+)$
   default = "1.7.1"
 }
+
 variable "arch" {
   type    = string
   default = "amd64"
 }
+
 variable "server_type" {
   type    = string
   default = "cx21"
 }
+
 variable "server_location" {
   type    = string
   default = "hel1"
