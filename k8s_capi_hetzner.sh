@@ -235,6 +235,14 @@ if ! test -f cluster.yaml; then
     >cluster.yaml
 fi
 sed -i -E "s/^(\s+imageName:) .+$/\1 ${CAPH_IMAGE_NAME}/" cluster.yaml
+if test -n "${POD_CIDR_BLOCK}"; then
+    export POD_CIDR_BLOCK
+    yq --inplace eval 'select(.kind == "Cluster").spec.clusterNetwork.pods.cidrBlocks |= [env(POD_CIDR_BLOCK)]' cluster.yaml
+fi
+if test -n "${SERVICE_CIDR_BLOCK}"; then
+    export SERVICE_CIDR_BLOCK
+    yq --inplace eval 'select(.kind == "Cluster").spec.clusterNetwork.services.cidrBlocks |= [env(SERVICE_CIDR_BLOCK)]' cluster.yaml
+fi
 : "${STOP_AFTER_CLUSTER_YAML:=false}"
 if ${STOP_AFTER_CLUSTER_YAML}; then
     echo "STOP_AFTER_CLUSTER_YAML is set. Aborting."
