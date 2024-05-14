@@ -50,7 +50,11 @@ EOF
 # Apply sysctl params without reboot
 sysctl --system
 
-CONTAINERD=1.7.10 # https://github.com/containerd/containerd/releases
+#CONTAINERD=1.7.10 # https://github.com/containerd/containerd/releases
+if test -z "${CONTAINERD}"; then
+  echo "CONTAINERD is not set"
+  exit 1
+fi
 
 # Install containerd
 wget https://github.com/containerd/containerd/releases/download/v${CONTAINERD}/cri-containerd-cni-${CONTAINERD}-linux-${PACKER_ARCH}.tar.gz

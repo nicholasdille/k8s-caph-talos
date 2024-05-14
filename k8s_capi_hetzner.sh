@@ -74,19 +74,21 @@ fi
 export HCLOUD_TOKEN
 
 : "${PACKER_REBUILD:=false}"
+: "${TALOS:=false}"
 if test "$( hcloud image list --selector caph-image-name --output json | jq length )" -eq 0; then
     echo "Warning: No image with label caph-image-name found. Image rebuild required."
     PACKER_REBUILD=true
 fi
 if ${PACKER_REBUILD}; then
     if ${TALOS}; then
-        # TODO: Set image name: caph-image-name
-        packer init k8s-talos/talos.pkr.hcl
-        packer build k8s-talos/talos.pkr.hcl
+        pushd images/talos
+        packer init talos.pkr.hcl
+        packer build talos.pkr.hcl
+        popd
 
     else
         echo "### Create CAPH image"
-        pushd k8s1.28.4-ubuntu22.04-containerd
+        pushd images/ubuntu-22.04
         packer init ubuntu.pkr.hcl
         packer build ubuntu.pkr.hcl
         popd
@@ -107,6 +109,7 @@ if test -z "${CAPH_IMAGE_NAME}"; then
         | jq --raw-output 'sort_by(.created) | .[-1] | .labels."caph-image-name"'
     )"
 fi
+echo "### Using CAPH image <${CAPH_IMAGE_NAME}>"
 
 : "${CLUSTER_NAME:=my-cluster}"
 export CLUSTER_NAME
@@ -220,6 +223,10 @@ export HCLOUD_CONTROL_PLANE_MACHINE_TYPE
 export HCLOUD_WORKER_MACHINE_TYPE
 
 echo "### Rolling out workload cluster"
+: "${REUSE_CLUSTER_YAML:=false}"
+if ! ${REUSE_CLUSTER_YAML}; then
+    rm -f cluster.yaml
+fi
 if ! test -f cluster.yaml; then
     clusterctl generate cluster "${CLUSTER_NAME}" \
         --kubernetes-version "v${KUBERNETES_VERSION}" \

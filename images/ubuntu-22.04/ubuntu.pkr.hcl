@@ -17,6 +17,18 @@ variable "arch" {
     default = "amd64"
 }
 
+variable "kubernetes_version" {
+  type    = string
+  # renovate: datasource=github-releases depName=kubernetes/kubernetes extractVersion=^v(?<version>\d+\.\d+\.\d+)$
+  default = "1.28.4"
+}
+
+variable "containerd_version" {
+  type    = string
+  # renovate: datasource=github-releases depName=containerd/containerd extractVersion=^v(?<version>\d+\.\d+\.\d+)$
+  default = "1.7.10"
+}
+
 variable "image-name" {
     type = string
     default = "ubuntu-22.04-kubeadm"
@@ -45,7 +57,9 @@ build {
     provisioner "shell" {
         environment_vars = [
             "PACKER_OS_IMAGE=${var.os}",
-            "PACKER_ARCH=${var.arch}"
+            "PACKER_ARCH=${var.arch}",
+            "KUBERNETES_VERSION=${var.kubernetes_version}",
+            "CONTAINERD=${var.containerd_version}"
         ]
         scripts = [
             "scripts/base.sh",

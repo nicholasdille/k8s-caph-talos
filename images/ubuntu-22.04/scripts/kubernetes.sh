@@ -18,7 +18,11 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-KUBERNETES_VERSION=1.28.4 # https://kubernetes.io/releases/#release-history
+#KUBERNETES_VERSION=1.28.4 # https://kubernetes.io/releases/#release-history
+if test -z "${KUBERNETES_VERSION}"; then
+  echo "KUBERNETES_VERSION is not set"
+  exit 1
+fi
 TRIMMED_KUBERNETES_VERSION=$(echo ${KUBERNETES_VERSION} | sed 's/^v//' | awk -F . '{print $1 "." $2}')
 mkdir -p /etc/apt/keyrings/
 curl -fsSL https://pkgs.k8s.io/core:/stable:/v$TRIMMED_KUBERNETES_VERSION/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg

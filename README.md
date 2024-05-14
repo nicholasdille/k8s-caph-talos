@@ -75,7 +75,7 @@ This is how the script works:
 - [x] Idempotency (being able to restart and pick up where it left off)
 - [ ] Configure CIDRs for pods and services
     ```shell
-    yq --inplace eval '.spec.clusterNetwork.pods.cidrBlocks = ["foo"]' kubeadm/*.yaml
+    yq --inplace eval '.spec.clusterNetwork.pods.cidrBlocks = ["foo"]' templates/kubeadm/*.yaml
     ```
     OR
     ```shell

@@ -29,7 +29,7 @@ variable "server_location" {
 }
 
 locals {
-  image = "https://github.com/siderolabs/talos/releases/download/${var.talos_version}/hcloud-${var.arch}.raw.xz"
+  image = "https://github.com/siderolabs/talos/releases/download/v${var.talos_version}/hcloud-${var.arch}.raw.xz"
 }
 
 source "hcloud" "talos" {
