@@ -1,4 +1,4 @@
-# k8s_caph_talos
+# Kubernetes using Cluster API on Hetzner Cloud - eventually with Talos
 
 This repository contains an opinionated script to create a Kubernetes cluster using the [Cluster API](https://cluster-api.sigs.k8s.io/) on [Hetzner Cloud](https://www.hetzner.com/de/cloud/) with the option to use [Talos](https://www.talos.dev/) as the operating system.
 
