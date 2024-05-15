@@ -4,3 +4,4 @@ ssh*
 kubeconfig*
 
 cluster.yaml
+*.log

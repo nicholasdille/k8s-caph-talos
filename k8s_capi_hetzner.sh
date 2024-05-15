@@ -355,25 +355,22 @@ KUBECONFIG=kubeconfig-${CLUSTER_NAME} cilium status --wait
 
 # TODO: Retrieve talosconfig
 
+kubectl --namespace capi-system logs deployment/capi-controller-manager \
+>capi-controller-manager.log
+kubectl --namespace capi-kubeadm-bootstrap-system logs deployment/capi-kubeadm-bootstrap-controller-manager \
+>capi-kubeadm-bootstrap-controller-manager.log
+kubectl --namespace capi-kubeadm-control-plane-system logs deployment/capi-kubeadm-control-plane-controller-manager \
+>capi-kubeadm-control-plane-controller-manager.log
+kubectl --namespace caph-system logs deployment/caph-controller-manager \
+>caph-controller-manager.log
+
 echo "### Initialize CAPH in workload cluster"
 clusterctl init --bootstrap "${CLUSTERCTL_INIT_BOOTSTRAP}" --control-plane "${CLUSTERCTL_INIT_CONTROL_PLANE}" --kubeconfig kubeconfig-${CLUSTER_NAME} --infrastructure hetzner --wait-providers
 
 echo "### Waiting for management resources to be running"
-MAX_WAIT_SECONDS=$(( 30 * 60 ))
-SECONDS=0
-while test "${SECONDS}" -lt "${MAX_WAIT_SECONDS}"; do
-    echo
-    echo "Waiting for all pods to be running..."
-
-    if ! kubectl --kubeconfig kubeconfig-${CLUSTER_NAME} get pods -A | tail -n +2 | grep -vq Running; then
-        echo "### All pods are ready"
-        break
-    fi
-
-    sleep 10
-done
-if kubectl --kubeconfig kubeconfig-${CLUSTER_NAME} get pods -A | tail -n +2 | grep -vq Running; then
+if ! kubectl --kubeconfig=kubeconfig-${CLUSTER_NAME} wait pods --all --all-namespaces --for condition=Ready --timeout=30m; then
     echo "### Pods are not ready"
+    kubectl get pods --all-namespaces
     exit 1
 fi
 echo "### Pods are ready"
