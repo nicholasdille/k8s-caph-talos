@@ -249,30 +249,15 @@ if ${STOP_AFTER_CLUSTER_YAML}; then
     exit 0
 fi
 
+echo "### Initializing control plane of workload cluster"
 kubectl apply -f cluster.yaml
 sleep 10
-MAX_WAIT_SECONDS=$(( 30 * 60 ))
-SECONDS=0
-while test "${SECONDS}" -lt "${MAX_WAIT_SECONDS}"; do
-    echo
-    echo "### Waiting for control plane of workload cluster to be initialized"
-    clusterctl describe cluster ${CLUSTER_NAME}
-
-    control_plane_initialized="$(
-        kubectl get cluster ${CLUSTER_NAME} --output json | \
-            jq --raw-output '.status.conditions[] | select(.type == "ControlPlaneInitialized") | .status'
-    )"
-    if test "${control_plane_initialized}" == "True"; then
-        echo "### Control plane initialized"
-        break
-    fi
-
-    sleep 30
-done
-if test "${control_plane_initialized}" == "False"; then
+if ! kubectl wait cluster ${CLUSTER_NAME} --for condition=ControlPlaneInitialized --timeout=30m; then
     echo "### Control plane failed to initialize"
+    clusterctl describe cluster ${CLUSTER_NAME} --show-conditions all
     exit 1
 fi
+echo "### Control plane initialized"
 
 echo "### Getting kubeconfig for workload cluster"
 clusterctl get kubeconfig ${CLUSTER_NAME} >kubeconfig-${CLUSTER_NAME}
@@ -280,7 +265,7 @@ clusterctl get kubeconfig ${CLUSTER_NAME} >kubeconfig-${CLUSTER_NAME}
 echo "### Deploy CNI plugin"
 helm repo add cilium https://helm.cilium.io
 helm repo update
-KUBECONFIG=kubeconfig-${CLUSTER_NAME} helm install \
+KUBECONFIG=kubeconfig-${CLUSTER_NAME} helm upgrade --install \
     --namespace kube-system \
     cilium cilium/cilium \
         --set cluster.id=0 \
@@ -298,12 +283,13 @@ KUBECONFIG=kubeconfig-${CLUSTER_NAME} helm install \
         --set hubble.relay.enabled=true \
         --set hubble.ui.enabled=true \
         --set hubble.metrics.enabled="{dns,drop,tcp,flow,icmp,http}" \
-        --wait --timeout 5m
+        --wait \
+        --timeout 5m
 
 echo "### Deploy cloud-controller-manager"
 helm repo add syself https://charts.syself.com
 helm repo update syself
-KUBECONFIG=kubeconfig-${CLUSTER_NAME} helm install \
+KUBECONFIG=kubeconfig-${CLUSTER_NAME} helm upgrade --install \
 	--namespace kube-system \
     ccm syself/ccm-hcloud \
         --set secret.name=hetzner \
@@ -311,7 +297,7 @@ KUBECONFIG=kubeconfig-${CLUSTER_NAME} helm install \
         --set privateNetwork.enabled=false
 
 echo "### Deploy csi"
-KUBECONFIG=kubeconfig-${CLUSTER_NAME} helm install \
+KUBECONFIG=kubeconfig-${CLUSTER_NAME} helm upgrade --install \
     --namespace kube-system \
     csi syself/csi-hcloud \
         --set controller.hcloudToken.existingSecret.name=hetzner \
@@ -320,54 +306,30 @@ KUBECONFIG=kubeconfig-${CLUSTER_NAME} helm install \
         --set storageClasses[0].defaultStorageClass=true \
         --set storageClasses[0].reclaimPolicy=Retain
 
-MAX_WAIT_SECONDS=$(( 30 * 60 ))
-SECONDS=0
-while test "${SECONDS}" -lt "${MAX_WAIT_SECONDS}"; do
-    echo
-    echo "### Waiting for control plane of workload cluster to be ready"
-    clusterctl describe cluster ${CLUSTER_NAME}
-
-    control_plane_ready="$(
-        kubectl get cluster ${CLUSTER_NAME} --output json | \
-            jq --raw-output '.status.conditions[] | select(.type == "ControlPlaneReady") | .status'
-    )"
-    if test "${control_plane_ready}" == "True"; then
-        kubectl describe cluster ${CLUSTER_NAME}
-        kubectl describe KubeadmControlPlane
-        echo "### Control plane ready"
-        break
-    fi
-
-    sleep 60
-done
-if test "${control_plane_ready}" == "False"; then
+echo "### Waiting for controle plane to become ready"
+if ! kubectl wait  cluster ${CLUSTER_NAME} --for condition=Ready --timeout=30m; then
     echo "### Control plane failed to become ready"
+    clusterctl describe cluster ${CLUSTER_NAME} --show-conditions all
     exit 1
 fi
+echo "### Control plane ready"
 
-MAX_WAIT_SECONDS=$(( 30 * 60 ))
-SECONDS=0
-while test "${SECONDS}" -lt "${MAX_WAIT_SECONDS}"; do
-    echo
-    echo "### Waiting for workers of workload cluster to be ready"
-    clusterctl describe cluster ${CLUSTER_NAME}
+echo "### Waiting for controle plane machines to become healthy"
+if ! kubectl wait machines --selector cluster.x-k8s.io/control-plane-name=${CLUSTER_NAME}-control-plane --for condition=NodeHealthy --timeout=30m; then
+    echo "### Control plane machines failed to become healthy"
+    clusterctl describe cluster ${CLUSTER_NAME} --show-conditions all
+    exit 1
+fi
+echo "### Control plane machines healthy"
 
-    worker_ready="$(
-        kubectl get machinedeployment ${CLUSTER_NAME}-md-0 --output json | \
-            jq --raw-output '.status.conditions[] | select(.type == "Ready") | .status'
-    )"
-    if test "${worker_ready}" == "True"; then
-        echo "### Workers ready"
-        break
-    fi
-
-    sleep 60
-done
-if test "${worker_ready}" == "False"; then
+echo "### Waiting for workers of workload cluster to be ready"
+if ! kubectl wait machinedeployment ${CLUSTER_NAME}-md-0 --for condition=Ready  --timeout=30m; then
     echo "### Workers failed to become ready"
+    clusterctl describe cluster ${CLUSTER_NAME} --show-conditions all
     kubectl describe machinedeployment ${CLUSTER_NAME}-md-0
     exit 1
 fi
+echo "### Workers ready"
 
 MAX_WAIT_SECONDS=$(( 30 * 60 ))
 SECONDS=0

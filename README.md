@@ -74,7 +74,7 @@ This is how the script works:
 - [ ] Talos
 - [x] Idempotency (being able to restart and pick up where it left off)
 - [x] Configure CIDRs for pods and services
-- [ ] Test `kubectl wait`
+- [x] Test `kubectl wait`
 - [ ] Support infrastructure docker?
 - [ ] Support infrastructure vcluster?
 - [ ] Check out [Cluster API Operator](https://github.com/kubernetes-sigs/cluster-api-operator)
