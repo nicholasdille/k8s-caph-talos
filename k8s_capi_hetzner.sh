@@ -329,27 +329,12 @@ if ! kubectl wait machinedeployment ${CLUSTER_NAME}-md-0 --for condition=Ready  
     kubectl describe machinedeployment ${CLUSTER_NAME}-md-0
     exit 1
 fi
-echo "### Workers ready"
-
-MAX_WAIT_SECONDS=$(( 30 * 60 ))
-SECONDS=0
-while test "${SECONDS}" -lt "${MAX_WAIT_SECONDS}"; do
-    echo
-    echo "### Waiting for nodes to be ready..."
-    sleep 5
-
-    if ! kubectl --kubeconfig kubeconfig-${CLUSTER_NAME} get nodes --output jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.conditions[?(@.reason=="KubeletReady")].status}{"\n"}{end}' | grep -qE "\sFalse$"; then
-        echo "### All nodes are ready"
-        break
-    fi
-done
-if kubectl --kubeconfig kubeconfig-${CLUSTER_NAME} get nodes --output jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.conditions[?(@.reason=="KubeletReady")].status}{"\n"}{end}' | grep -qE "\sFalse$"; then
-    kubectl --kubeconfig kubeconfig-${CLUSTER_NAME} describe nodes
-    kubectl --kubeconfig kubeconfig-${CLUSTER_NAME} get pods -A
+if ! kubectl --kubeconfig=kubeconfig-${CLUSTER_NAME} wait nodes --all --all-namespaces --for condition=Ready --timeout=30m; then
     echo "### Nodes are not ready"
+    kubectl get nodes --all-namespaces
     exit 1
 fi
-echo "### Nodes are ready"
+echo "### Workers ready"
 
 KUBECONFIG=kubeconfig-${CLUSTER_NAME} cilium status --wait
 
