@@ -26,7 +26,7 @@ variable "kubernetes_version" {
 variable "containerd_version" {
   type    = string
   # renovate: datasource=github-releases depName=containerd/containerd extractVersion=^v(?<version>\d+\.\d+\.\d+)$
-  default = "1.7.10"
+  default = "1.7.18"
 }
 
 variable "image-name" {
