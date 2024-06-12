@@ -20,7 +20,7 @@ variable "arch" {
 variable "kubernetes_version" {
   type    = string
   # renovate: datasource=github-releases depName=kubernetes/kubernetes extractVersion=^v(?<version>\d+\.\d+\.\d+)$
-  default = "1.28.4"
+  default = "1.28.11"
 }
 
 variable "containerd_version" {
